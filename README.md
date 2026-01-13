@@ -1,4 +1,4 @@
-# ashtachemma
+# Game
 Current Game Rules
 1. Setup
 Players: 2 to 4 players.

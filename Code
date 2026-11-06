@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Fruit House: Authentic Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --wood-dark: #3e2723;
+            --wood-light: #5d4037;
+            --gold: #ffd700;
+        }
+
+        body {
+            font-family: 'Lato', sans-serif;
+            background: radial-gradient(circle at center, #2c1e1a, #000);
+            color: #fff;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        .wood-texture {
+            background-color: var(--wood-dark);
+            background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 2px, transparent 2px, transparent 8px);
+        }
+
+        /* --- Layout --- */
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        /* --- Board --- */
+        .board-wrapper {
+            position: relative;
+            width: 95vmin;
+            height: 95vmin;
+            max-width: 500px;
+            max-height: 500px;
+            padding: 5px;
+            background: #5D4037;
+            border-radius: 8px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+            display: grid;
+            grid-template-columns: 1fr 5fr 1fr; /* Side areas vs Board */
+            grid-template-rows: 1fr 5fr 1fr;
+            gap: 5px;
+        }
+
+        /* The 5x5 Grid in the center */
+        .main-board {
+            grid-column: 2;
+            grid-row: 2;
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            grid-template-rows: repeat(5, 1fr);
+            gap: 2px;
+            background: #3E2723;
+            border: 2px solid #8D6E63;
+        }
+
+        /* Cells */
+        .cell {
+            background-color: #EFEBE9;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        /* Full Box X Mark */
+        .cell.safe {
+            background-color: #FFF9C4;
+        }
+        .cell.safe::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(to top right, transparent calc(50% - 1px), #8D6E63 calc(50% - 1px), #8D6E63 calc(50% + 1px), transparent calc(50% + 1px)),
+                        linear-gradient(to bottom right, transparent calc(50% - 1px), #8D6E63 calc(50% - 1px), #8D6E63 calc(50% + 1px), transparent calc(50% + 1px));
+            opacity: 0.4;
+        }
+
+        .cell.fruit-house {
+            background: radial-gradient(circle, #FFECB3, #FFCA28);
+            z-index: 5;
+            border: 2px solid #FF6F00;
+        }
+
+        /* --- Home Bases (Corners) --- */
+        .home-base {
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-content: center;
+            padding: 2px;
+            position: relative;
+        }
+        .home-base.active-turn {
+            box-shadow: inset 0 0 15px rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        .hb-p1 { grid-column: 2; grid-row: 3; border-bottom: 3px solid #ff5252; } /* Bottom Red */
+        .hb-p2 { grid-column: 1; grid-row: 2; border-left: 3px solid #4caf50; }   /* Left Green */
+        .hb-p3 { grid-column: 2; grid-row: 1; border-top: 3px solid #ffb300; }    /* Top Yellow */
+        .hb-p4 { grid-column: 3; grid-row: 2; border-right: 3px solid #2979ff; }  /* Right Blue */
+
+        /* Fix for grid alignment of bases - actually let's just use absolute positioning for clarity or 
+           Keep grid but P1 is bottom center, P3 is top center.
+           The corners of the 5x5 are game tiles. The bases are OUTSIDE.
+        */
+
+        /* --- Pawns --- */
+        .pawn {
+            width: 18px; height: 18px;
+            border-radius: 50%;
+            box-shadow: 0 3px 3px rgba(0,0,0,0.4), inset 1px 1px 3px rgba(255,255,255,0.6);
+            z-index: 20;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(0,0,0,0.2);
+        }
+        .pawn.p1 { background: radial-gradient(circle at 30% 30%, #ff8a80, #d32f2f); }
+        .pawn.p2 { background: radial-gradient(circle at 30% 30%, #a5d6a7, #388e3c); }
+        .pawn.p3 { background: radial-gradient(circle at 30% 30%, #ffe082, #ffa000); }
+        .pawn.p4 { background: radial-gradient(circle at 30% 30%, #90caf9, #1976d2); }
+
+        .pawn.highlight {
+            transform: scale(1.4);
+            box-shadow: 0 0 10px #fff;
+            cursor: pointer;
+            z-index: 50;
+            animation: bounce 0.8s infinite;
+        }
+        
+        /* Lock icon for Inner Path restriction */
+        .pawn.inner-locked::after {
+            content: '•';
+            position: absolute;
+            top: 50%; left: 50%; transform: translate(-50%, -55%);
+            color: rgba(0,0,0,0.5);
+            font-size: 12px;
+        }
+
+        @keyframes bounce { 0%, 100% { transform: scale(1.4); } 50% { transform: scale(1.6); } }
+
+        /* Stacking Container */
+        .pawn-stack {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            width: 100%; height: 100%;
+            justify-items: center;
+            align-items: center;
+            pointer-events: none;
+        }
+        .pawn { pointer-events: auto; }
+
+        /* --- Controls --- */
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
+
+        .shell-container {
+            height: 60px;
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .cowrie-shell {
+            width: 30px; height: 45px;
+            filter: drop-shadow(0 4px 4px rgba(0,0,0,0.5));
+            transition: transform 0.5s;
+        }
+
+        .btn-roll {
+            background: linear-gradient(to bottom, #ffb74d, #e65100);
+            border: none;
+            padding: 12px 40px;
+            border-radius: 30px;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2rem;
+            box-shadow: 0 5px 0 #bf360c, 0 10px 20px rgba(0,0,0,0.4);
+            font-family: 'Playfair Display', serif;
+        }
+        .btn-roll:active { transform: translateY(4px); box-shadow: 0 1px 0 #bf360c; }
+        .btn-roll:disabled { filter: grayscale(1); transform: translateY(4px); box-shadow: none; }
+
+        /* --- Text --- */
+        .status-text {
+            font-size: 1rem;
+            color: #ffecb3;
+            margin-bottom: 8px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+            height: 1.5rem;
+        }
+
+        /* Responsive */
+        @media(min-width: 600px) {
+            .pawn { width: 24px; height: 24px; }
+            .cowrie-shell { width: 40px; height: 55px; }
+        }
+    </style>
+</head>
+<body class="wood-texture">
+
+    <div class="game-container">
+        
+        <!-- Board -->
+        <div class="board-wrapper">
+            <!-- Player Bases (Outside Grid) -->
+            <div id="base-1" class="home-base hb-p2"></div> <!-- Green (Left) -->
+            <div id="base-2" class="home-base hb-p3"></div> <!-- Yellow (Top) -->
+            <div id="base-3" class="home-base hb-p4"></div> <!-- Blue (Right) -->
+            <div id="base-0" class="home-base hb-p1"></div> <!-- Red (Bottom) -->
+
+            <!-- 5x5 Grid -->
+            <div id="main-board" class="main-board">
+                <!-- Generated via JS -->
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls">
+            <div id="status" class="status-text">Player 1's Turn</div>
+            
+            <div id="shells" class="shell-container">
+                <!-- Shell SVGs -->
+            </div>
+
+            <div class="flex flex-col items-center">
+                <div id="score-display" class="text-3xl font-bold text-white mb-2 opacity-0 transition-all">0</div>
+                <button id="roll-btn" class="btn-roll" onclick="rollDice()">ROLL DICE</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="start-modal" class="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
+        <div class="bg-[#3E2723] p-8 rounded-xl border-2 border-[#8D6E63] text-center max-w-xs w-full">
+            <h1 class="text-3xl text-[#FFD700] font-serif mb-2">FRUIT HOUSE</h1>
+            <p class="text-gray-400 text-xs mb-6 uppercase tracking-widest">Authentic Rules</p>
+            <div class="space-y-2">
+                <p class="text-xs text-white/70 mb-2">Select Players:</p>
+                <div class="flex gap-2 justify-center">
+                    <button onclick="initGame(2)" class="bg-[#5D4037] text-white px-4 py-2 rounded border border-[#8D6E63]">2P</button>
+                    <button onclick="initGame(3)" class="bg-[#5D4037] text-white px-4 py-2 rounded border border-[#8D6E63]">3P</button>
+                    <button onclick="initGame(4)" class="bg-[#5D4037] text-white px-4 py-2 rounded border border-[#8D6E63]">4P</button>
+                </div>
+            </div>
+            <div class="mt-6 text-left text-[10px] text-gray-400 space-y-1">
+                <p>• <b>Roll 8</b> (0 up): Unlock ALL pawns.</p>
+                <p>• <b>Roll 4</b> (4 up): Unlock 2 pawns.</p>
+                <p>• <b>Capture</b>: Enemy resets to Lock.</p>
+                <p>• <b>Safe Zones</b>: Corners & Middles marked X.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Assets ---
+        const SVG_SHELL_OPEN = `<svg class="cowrie-shell" viewBox="0 0 30 45"><ellipse cx="15" cy="22.5" rx="13" ry="20" fill="#fff" stroke="#aaa"/><path d="M15 5v35" stroke="#444" stroke-width="3"/><path d="M10 10q5 12.5 10 0M10 35q5-12.5 10 0" stroke="#ddd" fill="none"/></svg>`;
+        const SVG_SHELL_CLOSED = `<svg class="cowrie-shell" viewBox="0 0 30 45"><ellipse cx="15" cy="22.5" rx="13" ry="20" fill="url(#grad)" stroke="#8D6E63"/><defs><radialGradient id="grad" cx="0.3" cy="0.3"><stop offset="0%" stop-color="#fff"/><stop offset="100%" stop-color="#8D6E63"/></radialGradient></defs></svg>`;
+
+        // --- Config ---
+        const SAFE_INDICES = [
+            2, 10, 12, 14, 22,  // Middles & Center
+            6, 8, 16, 18        // Inner Diagonals
+        ];
+        const CENTER = 12;
+        
+        // Paths (0-24)
+        const PATHS = {
+            0: [22,21,20,15,10,5,0,1,2,3,4,9,14,19,24,23,18,13,8,7,6,11,16,17,12], // Red (Bottom)
+            1: [10,5,0,1,2,3,4,9,14,19,24,23,22,21,20,15,16,17,18,13,8,7,6,11,12],  // Green (Left)
+            2: [2,3,4,9,14,19,24,23,22,21,20,15,10,5,0,1,6,11,16,17,18,13,8,7,12],   // Yellow (Top)
+            3: [14,19,24,23,22,21,20,15,10,5,0,1,2,3,4,9,8,7,6,11,16,17,18,13,12]    // Blue (Right)
+        };
+
+        let state = {
+            players: [],
+            turn: 0,
+            roll: 0,
+            phase: 'IDLE', // IDLE, ROLLING, MOVING, SPAWNING
+            extra: false
+        };
+
+        // Initialize UI shells
+        document.getElementById('shells').innerHTML = Array(4).fill(SVG_SHELL_CLOSED).join('');
+
+        function initGame(count) {
+            state.players = [];
+            for(let i=0; i<count; i++) {
+                let pid = i;
+                if(count === 2 && i === 1) pid = 2; // Opposite for 2p
+                
+                state.players.push({
+                    id: pid,
+                    pawns: Array(4).fill(0).map((_, idx) => ({
+                        id: `p-${pid}-${idx}`,
+                        pid: pid,
+                        pos: -1,      // -1 means Home Base
+                        active: false, // True if spawned on board
+                        innerUnlocked: false, 
+                        done: false
+                    }))
+                });
+            }
+            
+            drawBoard();
+            renderPawns();
+            document.getElementById('start-modal').style.display = 'none';
+            updateUI();
+        }
+
+        function drawBoard() {
+            const board = document.getElementById('main-board');
+            board.innerHTML = '';
+            for(let i=0; i<25; i++) {
+                const cell = document.createElement('div');
+                cell.className = `cell ${SAFE_INDICES.includes(i) ? 'safe' : ''} ${i === CENTER ? 'fruit-house' : ''}`;
+                if(i === CENTER) cell.innerHTML = '<span style="font-size:24px">🍍</span>';
+                
+                const stack = document.createElement('div');
+                stack.className = 'pawn-stack';
+                stack.id = `cell-${i}`;
+                cell.appendChild(stack);
+                board.appendChild(cell);
+            }
+        }
+
+        function renderPawns() {
+            // Clear all
+            document.querySelectorAll('.pawn').forEach(e => e.remove());
+            
+            state.players.forEach(pl => {
+                pl.pawns.forEach(p => {
+                    if(p.done) return;
+
+                    let container;
+                    if(p.pos === -1) {
+                        container = document.getElementById(`base-${p.pid}`);
+                    } else {
+                        const cellIdx = PATHS[p.pid][p.pos];
+                        container = document.getElementById(`cell-${cellIdx}`);
+                    }
+
+                    if(container) {
+                        const el = document.createElement('div');
+                        el.className = `pawn p${p.pid+1} ${!p.innerUnlocked ? 'inner-locked' : ''}`;
+                        el.id = p.id;
+                        if(p.pos === -1) el.style.opacity = "0.7"; // Dimmed in base
+                        
+                        el.onclick = (e) => { e.stopPropagation(); handlePawnClick(p); };
+                        container.appendChild(el);
+                    }
+                });
+            });
+        }
+
+        // --- Logic ---
+
+        function rollDice() {
+            if(state.phase !== 'IDLE') return;
+            state.phase = 'ROLLING';
+            
+            const btn = document.getElementById('roll-btn');
+            btn.disabled = true;
+            btn.innerText = "...";
+
+            let ticks = 0;
+            const interval = setInterval(() => {
+                const temp = Array(4).fill(0).map(() => Math.random() > 0.5);
+                renderShells(temp);
+                ticks++;
+                if(ticks > 8) {
+                    clearInterval(interval);
+                    finalizeRoll();
+                }
+            }, 100);
+        }
+
+        function renderShells(vals) {
+            const container = document.getElementById('shells');
+            container.innerHTML = vals.map(v => {
+                return `<div style="transform: rotate(${Math.random()*360}deg)">${v ? SVG_SHELL_OPEN : SVG_SHELL_CLOSED}</div>`;
+            }).join('');
+        }
+
+        function finalizeRoll() {
+            // 4 Shells
+            const vals = Array(4).fill(0).map(() => Math.random() > 0.5); // true = open (1 pt)
+            const openCount = vals.filter(v => v).length;
+            renderShells(vals);
+            
+            let score = openCount;
+            if(openCount === 0) score = 8;
+            if(openCount === 4) score = 4;
+            
+            state.roll = score;
+            
+            // Show Score
+            const sEl = document.getElementById('score-display');
+            sEl.innerText = score;
+            sEl.style.opacity = 1;
+            
+            // Check Bonus
+            state.extra = (score === 4 || score === 8); // 4 and 8 give bonus
+            
+            processTurnLogic(score);
+        }
+
+        function processTurnLogic(score) {
+            const player = state.players[state.turn];
+            const inactivePawns = player.pawns.filter(p => !p.active && !p.done);
+            const activePawns = player.pawns.filter(p => p.active && !p.done);
+            
+            // SPAWN LOGIC (Priority)
+            // "8 roll (all four pawns gets access)"
+            // "4 roll (only 2 pawns can move)"
+            let spawned = false;
+            
+            if(inactivePawns.length > 0) {
+                if(score === 8) {
+                    // Unlock ALL
+                    inactivePawns.forEach(p => { p.active = true; p.pos = 0; });
+                    spawned = true;
+                    showStatus("ALL PAWNS UNLOCKED!");
+                } else if (score === 4) {
+                    // Unlock 2 (or remaining)
+                    const count = Math.min(2, inactivePawns.length);
+                    for(let i=0; i<count; i++) {
+                        inactivePawns[i].active = true;
+                        inactivePawns[i].pos = 0;
+                    }
+                    spawned = true;
+                    showStatus("2 PAWNS UNLOCKED!");
+                }
+            }
+
+            if(spawned) {
+                renderPawns();
+                // Turn consumed by spawning? Usually in Indian Ludo, entering is the move.
+                // User: "pawns can start moving only if... rules follows from then"
+                // Since 4/8 grant bonus, they get another roll anyway.
+                setTimeout(nextTurn, 1500);
+                return;
+            }
+
+            // MOVE LOGIC
+            // If no spawn happened, check if we can move active pawns
+            const movable = activePawns.filter(p => canMove(p, score));
+            
+            if(movable.length === 0) {
+                showStatus("No Moves Possible");
+                setTimeout(nextTurn, 1500);
+            } else if (movable.length === 1) {
+                // Auto move if only 1 option? No, let user click for feel.
+                state.phase = 'MOVING';
+                highlightPawns(movable);
+                document.getElementById('roll-btn').innerText = "MOVE PAWN";
+            } else {
+                state.phase = 'MOVING';
+                highlightPawns(movable);
+                document.getElementById('roll-btn').innerText = "SELECT PAWN";
+            }
+        }
+
+        function canMove(p, step) {
+            if(!p.active || p.done) return false;
+            const path = PATHS[p.pid];
+            const nextPos = p.pos + step;
+            
+            if(nextPos >= path.length) return false; // Overshoot
+            
+            // Inner Unlock Check (Must have captured to enter inner ring)
+            // Assuming Inner Ring starts at index 16 (Outer is 0-15)
+            if(!p.innerUnlocked && nextPos > 15 && p.pos <= 15) return false;
+            
+            return true;
+        }
+
+        function highlightPawns(list) {
+            list.forEach(p => {
+                const el = document.getElementById(p.id);
+                if(el) el.classList.add('highlight');
+            });
+        }
+
+        function handlePawnClick(p) {
+            if(state.phase !== 'MOVING') return;
+            if(p.pid !== state.players[state.turn].id) return;
+            
+            if(canMove(p, state.roll)) {
+                // Clear highlights
+                document.querySelectorAll('.pawn').forEach(e => e.classList.remove('highlight'));
+                
+                // Move
+                p.pos += state.roll;
+                
+                // Check Win
+                if(p.pos === PATHS[p.pid].length - 1) {
+                    p.done = true;
+                    showStatus("REACHED FRUIT HOUSE!");
+                }
+                
+                renderPawns();
+                
+                // Check Capture
+                let captured = false;
+                if(!p.done) {
+                    const tileIdx = PATHS[p.pid][p.pos];
+                    if(!SAFE_INDICES.includes(tileIdx)) {
+                        // Look for enemies
+                        state.players.forEach(opp => {
+                            if(opp.id !== p.pid) {
+                                opp.pawns.forEach(ep => {
+                                    if(ep.active && !ep.done && PATHS[ep.pid][ep.pos] === tileIdx) {
+                                        // KILL
+                                        ep.active = false;
+                                        ep.pos = -1;
+                                        ep.innerUnlocked = false; // Lock inner capability reset? Usually yes.
+                                        captured = true;
+                                    }
+                                });
+                            }
+                        });
+                    }
+                }
+
+                if(captured) {
+                    p.innerUnlocked = true; // Unlock inner path
+                    state.extra = true; // Bonus turn for kill
+                    showStatus("CAPTURE! +BONUS TURN");
+                    renderPawns(); // Refresh locked status visuals
+                }
+                
+                setTimeout(nextTurn, 800);
+            }
+        }
+
+        function nextTurn() {
+            const player = state.players[state.turn];
+            if(player.pawns.every(p => p.done)) {
+                alert(`PLAYER ${state.turn + 1} WINS!`);
+                location.reload();
+                return;
+            }
+
+            if(state.extra) {
+                state.extra = false;
+                state.phase = 'IDLE';
+                document.getElementById('roll-btn').disabled = false;
+                document.getElementById('roll-btn').innerText = "ROLL BONUS";
+            } else {
+                state.turn = (state.turn + 1) % state.players.length;
+                state.phase = 'IDLE';
+                updateUI();
+                document.getElementById('roll-btn').disabled = false;
+                document.getElementById('roll-btn').innerText = "ROLL DICE";
+                document.getElementById('score-display').style.opacity = 0;
+            }
+        }
+
+        function updateUI() {
+            const names = ['RED', 'GREEN', 'YELLOW', 'BLUE'];
+            const pid = state.players[state.turn].id;
+            document.getElementById('status').innerText = `${names[pid]}'S TURN`;
+            
+            // Highlight Active Base
+            document.querySelectorAll('.home-base').forEach(e => e.classList.remove('active-turn'));
+            document.getElementById(`base-${pid}`).classList.add('active-turn');
+        }
+        
+        function showStatus(msg) {
+            document.getElementById('status').innerText = msg;
+        }
+
+    </script>
+</body>
+</html>
